@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 import dataclasses
-import datetime
 import json
 import math
 import os
@@ -11,6 +10,7 @@ from collections import OrderedDict
 import paho.mqtt.client as mqtt
 import pika
 import requests
+from furl import furl
 
 # TODO: Remove global variables.
 settings = None
@@ -20,22 +20,21 @@ stats = {"msgcount": 0}
 @dataclasses.dataclass
 class Settings:
     amqp_uri: str
-    amqp_queue: str
-    mqtt_host: str
-    mqtt_port: int
-    mqtt_topic: str
-    mqtt_qos: int
+    mqtt_uri: str
+    amqp: furl = None
+    mqtt: furl = None
 
-    @staticmethod
-    def load(filepath: str):
-        with open(filepath, "r") as f:
-            config = json.load(f)
-            settings = Settings(**config)
-            if "CLOUDAMQP_URL" in os.environ:
-                settings.amqp_uri = os.environ["CLOUDAMQP_URL"]
-            settings.mqtt_port = int(settings.mqtt_port)
-            settings.mqtt_qos = int(settings.mqtt_qos)
-            return settings
+    def __post_init__(self):
+        if "CLOUDAMQP_URL" in os.environ:
+            self.amqp_uri = os.environ["CLOUDAMQP_URL"]
+
+        # amqp://user:pass@localhost:5672/acme_inbox
+        self.amqp = furl(self.amqp_uri)
+
+        # mqtt://user:pass@localhost:1883/workbench/test/area-42/test-node1/data.json?qos=1
+        self.mqtt = furl(self.mqtt_uri)
+        self.mqtt.port = self.mqtt.port or 1883
+        setattr(self.mqtt, "qos", int(self.mqtt.query.params.get("qos", 0)))
 
 
 class InvalidMessage(Exception):
@@ -45,8 +44,8 @@ class InvalidMessage(Exception):
 class Mqtt:
     def publish(self, message):
         client = mqtt.Client()
-        client.connect(settings.mqtt_host, settings.mqtt_port)
-        client.publish(settings.mqtt_topic, message, qos=settings.mqtt_qos)
+        client.connect(settings.mqtt.host, settings.mqtt.port)
+        client.publish(str(settings.mqtt.path).strip("/"), message, qos=settings.mqtt.qos)
 
 
 def receive_handler(channel, method, properties, body):
@@ -115,9 +114,9 @@ def submit_daq(data):
 
 def run():
 
-    settings = Settings.load(sys.argv[1])
+    settings = Settings(sys.argv[1], sys.argv[2])
 
-    # Access the CLOUDAMQP_URL environment variable and parse it (fallback to localhost)
+    amqp_queue = str(settings.amqp.path).strip("/")
     print(f"Connecting to AMQP server at {settings.amqp_uri}")
 
     params = pika.URLParameters(settings.amqp_uri)
@@ -128,7 +127,8 @@ def run():
         try:
             connection = pika.BlockingConnection(params)
             channel = connection.channel()
-            channel.basic_consume(receive_handler, settings.amqp_queue)
+            print(f"Start consumption from queue {amqp_queue}")
+            channel.basic_consume(receive_handler, amqp_queue)
             channel.start_consuming()
 
         except Exception as ex:

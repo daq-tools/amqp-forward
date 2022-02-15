@@ -1,8 +1,0 @@
-{
-  "amqp_uri": "amqp://user:pass@localhost:5672",
-  "amqp_queue":"queuename",
-  "mqtt_host": "localhost",
-  "mqtt_port": "1883",
-  "mqtt_topic": "workbench/test/area-42/test-node1/data.json",
-  "mqtt_qos": "1"
-}

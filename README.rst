@@ -26,4 +26,6 @@ Synopsis
 
     # Invoke
     python amqp-to-http.py
-    python amqp-to-mqtt.py amqp-to-mqtt.json
+    python amqp-to-mqtt.py \
+        "amqp://user:pass@localhost:5672/acme_inbox" \
+        "mqtt://user:pass@localhost:1883/workbench/test/area-42/test-node1/data.json?qos=1"

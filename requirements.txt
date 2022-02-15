@@ -1,3 +1,4 @@
 pika>=1.2.0,<2
 requests>=2,<3
 paho-mqtt>=1,<2
+furl>=2,<3
